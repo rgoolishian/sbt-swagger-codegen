@@ -17,16 +17,13 @@ package eu.unicredit.swagger
 object StringUtils {
 
   private def sanitizePath(s: String): String =
-    s.replaceAll("\\{([^}]+)\\}", ":$1").trim
+    s.replaceAll("\\{([^}]+)\\}", "\\$$1").trim
 
   def cleanDuplicateSlash(s: String): String =
     s.replaceAll("//+", "/")
 
   private def cleanUrl(s: String): String =
     s.replace("/?", "?").replaceAll("/$", "")
-
-  def cleanPathParams(s: String): String =
-    s.replace(":", "$").trim
 
   def padTo(n: Int, s: String): String =
     s + " " * (n - s.length max 0)

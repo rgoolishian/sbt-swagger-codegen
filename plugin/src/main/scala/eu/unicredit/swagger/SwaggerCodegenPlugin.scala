@@ -196,7 +196,7 @@ object SwaggerCodegenPlugin extends AutoPlugin {
                        routesFile: File,
                        clientTargetDir: File,
                        codegenPackage: String) = {
-    routesFile.delete()
+    //routesFile.delete()
     IO delete packageDir(modelTargetDir, codegenPackage)
     IO delete packageDir(serverTargetDir, codegenPackage)
     IO delete packageDir(clientTargetDir, codegenPackage)
@@ -276,19 +276,20 @@ object SwaggerCodegenPlugin extends AutoPlugin {
     checkFileExistence(sourcesDir)
     IO delete targetDir
 
-    val controllers =
+    val controllersAndRoutes =
       (for {
         file <- sourcesDir.listFiles()
         fName = file.getName
         fPath = file.getAbsolutePath
         if fName.endsWith(".json") || fName.endsWith(".yaml")
       } yield {
-        serverGenerator.generate(fPath, codegenPackage, codeProvidedPackage)
+        serverGenerator.generate(fPath, codegenPackage, codeProvidedPackage) ++
+          serverGenerator.generateRoutes(fPath, codegenPackage)
       }).flatten
 
-    val destDir = packageDir(targetDir, codegenPackage + ".controller")
+    val destDir = packageDir(targetDir, codegenPackage)
 
-    controllers.foreach { ss =>
+    controllersAndRoutes.foreach { ss =>
       IO write (destDir / ss.name, ss.code)
     }
 
@@ -299,24 +300,25 @@ object SwaggerCodegenPlugin extends AutoPlugin {
                                sourcesDir: File,
                                targetRoutesFile: File,
                                serverGenerator: ServerGenerator): Seq[File] = {
-    checkFileExistence(sourcesDir)
-    IO delete targetRoutesFile
+//    checkFileExistence(sourcesDir)
+//    IO delete targetRoutesFile
 
-    val routes =
-      (for {
-        file <- sourcesDir.listFiles()
-        fName = file.getName
-        fPath = file.getAbsolutePath
-        if fName.endsWith(".json") || fName.endsWith(".yaml")
-      } yield {
-        serverGenerator.generateRoutes(fPath, codegenPackage)
-      }).flatten
+//    val routes =
+//      (for {
+//        file <- sourcesDir.listFiles()
+//        fName = file.getName
+//        fPath = file.getAbsolutePath
+//        if fName.endsWith(".json") || fName.endsWith(".yaml")
+//      } yield {
+//        serverGenerator.generateRoutes(fPath, codegenPackage)
+//      }).flatten
 
-    val sr = routes.distinct.mkString("\n", "\n\n", "\n")
+//    val sr = routes.distinct.mkString("\n", "\n\n", "\n")
 
-    IO write (targetRoutesFile, sr)
+//    IO write (targetRoutesFile, sr)
 
-    Seq(targetRoutesFile)
+//    Seq(targetRoutesFile)
+    Seq.empty
   }
 
   def swaggerClientCodeGenImpl(codegenPackage: String,

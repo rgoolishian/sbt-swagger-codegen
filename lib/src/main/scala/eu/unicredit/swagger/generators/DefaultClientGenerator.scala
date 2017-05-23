@@ -126,7 +126,7 @@ class DefaultClientGenerator extends ClientGenerator with SharedServerClientCode
 
     val fullBodyParams = getParamsToBody(params)
 
-    val methodParams = getMethodParamas(params)
+    val methodParams = getMethodParams(params)
 
     //probably to be fixed with a custom ordering
     val urlParams: Seq[Tree] =
@@ -150,24 +150,22 @@ class DefaultClientGenerator extends ClientGenerator with SharedServerClientCode
           else REF(name))
       }
 
-    val baseUrl =
-      INTERP("s", LIT(cleanDuplicateSlash("$baseUrl/" + cleanPathParams(url))))
-    val baseUrlWithParams =
-      if (urlParams.isEmpty)
-        baseUrl
-      else
-        baseUrl INFIX ("+", THIS DOT "_render_url_params" APPLY (urlParams: _*))
-
-    val wsUrl = REF("WS") DOT "url" APPLY baseUrlWithParams
-    val wsUrlWithHeaders =
-      if (headerParams.isEmpty)
-        wsUrl
-      else
-        wsUrl DOT "withHeaders" APPLY SEQARG(THIS DOT "_render_header_params" APPLY (headerParams: _*))
-
     val tree: Tree =
-      DEFINFER(methodName) withParams (methodParams.values ++ bodyParams.values) := BLOCK(
-        wsUrlWithHeaders DOT opType APPLY fullBodyParams.values DOT "map" APPLY (
+      DEFINFER(methodName) withParams (methodParams.values ++ bodyParams.values) := BLOCK({
+        val baseUrl = INTERP("s", LIT(cleanDuplicateSlash("$baseUrl/" + url)))
+
+        val wsUrl = REF("WS") DOT "url" APPLY {
+          if (urlParams.isEmpty)
+            baseUrl
+          else
+            baseUrl INFIX("+", THIS DOT "_render_url_params" APPLY (urlParams: _*))
+        }
+
+        if (headerParams.isEmpty)
+          wsUrl
+        else
+          wsUrl DOT "withHeaders" APPLY SEQARG(THIS DOT "_render_header_params" APPLY (headerParams: _*))
+      } DOT opType APPLY fullBodyParams.values DOT "map" APPLY (
           LAMBDA(PARAM("resp")) ==> BLOCK {
             Seq(
               IF(

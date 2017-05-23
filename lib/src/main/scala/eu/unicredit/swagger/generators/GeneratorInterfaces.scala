@@ -29,7 +29,7 @@ trait JsonGenerator extends Generator {
 }
 
 trait ServerGenerator extends Generator {
-  def generateRoutes(fileName: String, destPackage: String): Option[String] = None
+  def generateRoutes(fileName: String, destPackage: String): Iterable[SyntaxString]
 
   def generate(fileName: String, destPackage: String, codeProvidedPackage: String): Iterable[SyntaxString]
 }

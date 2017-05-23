@@ -15,7 +15,6 @@
 package eu.unicredit.swagger.generators
 
 import eu.unicredit.swagger.SwaggerConversion
-import eu.unicredit.swagger.StringUtils._
 
 import treehugger.forest._
 import treehuggerDSL._
@@ -37,15 +36,15 @@ trait SharedServerClientCode extends SwaggerConversion {
       .capitalize + obj
   }
 
-  def genMethodCall(className: String, methodName: String, params: Seq[Parameter]): String = {
-    val p = getMethodParamas(params).map {
-      case (n, v) => s"$n: ${treeToString(v.tpt)}"
-    }
-    // since it is a route definition, this is not Scala code, so we generate it manually
-    s"$className.$methodName" + p.mkString("(", ", ", ")")
-  }
+//  def genMethodCall(className: String, methodName: String, params: Seq[Parameter]): String = {
+//    val p = getMethodParams(params).map {
+//      case (n, v) => s"$n: ${treeToString(v.tpt)}"
+//    }
+//    // since it is a route definition, this is not Scala code, so we generate it manually
+//    s"$className.$methodName" + p.mkString("(", ", ", ")")
+//  }
 
-  def getMethodParamas(params: Seq[Parameter]): Map[String, ValDef] =
+  def filterMethodParams(params: Seq[Parameter]): Seq[Parameter] =
     params
       .filter {
         case _: PathParameter => true
@@ -63,6 +62,9 @@ trait SharedServerClientCode extends SwaggerConversion {
         case _: QueryParameter => 3
         // other subtypes have been removed already
       }
+
+  def getMethodParams(params: Seq[Parameter]): Map[String, ValDef] =
+    filterMethodParams(params)
       .map(p => {
         (p.getName, PARAM(p.getName, paramType(p)): ValDef)
       })

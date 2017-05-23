@@ -32,15 +32,24 @@ class DefaultServerGenerator extends ServerGenerator with SharedServerClientCode
   def serviceNameFromFileName(fn: String) =
     objectNameFromFileName(fn, "Service")
 
-  override def generateRoutes(fileName: String, packageName: String): Option[String] = {
+  def routerNameFromFileName(fn: String) =
+     objectNameFromFileName(fn, "Router")
+
+  override def generateRoutes(fileName: String, packageName: String): Iterable[SyntaxString] = {
     val swagger = new SwaggerParser().read(fileName)
+
+    val routerName =
+      routerNameFromFileName(fileName)
+
+    val controllerName =
+      controllerNameFromFileName(fileName)
 
     val basePath = Option(swagger.getBasePath).getOrElse("/")
 
     val completePaths =
       swagger.getPaths.asScala.keySet.toSeq
 
-    def composeRoutes(p: String): Seq[String] = {
+    def composeRoutes(p: String): Seq[Tree] = {
       val path = swagger.getPath(p)
       if (path == null) return Seq()
 
@@ -50,39 +59,58 @@ class DefaultServerGenerator extends ServerGenerator with SharedServerClientCode
             Option(path.getPost) map ("POST" -> _),
             Option(path.getPut) map ("PUT" -> _)).flatten.toMap
 
-      val controllerName =
-        packageName + ".controller" + "." + controllerNameFromFileName(fileName)
-
       (for {
-        op <- ops
+        (verb, op) <- ops
       } yield {
 
-        val url =
-          doUrl(basePath, p)
+        val params = filterMethodParams(op.getParameters.asScala)
+        val methodCall = (REF("controller") DOT op.getOperationId) APPLY params.map { p => REF(p.getName) }
 
-        val methodName =
-          op._2.getOperationId
-
-        def genMethodCall(className: String, methodName: String, params: Seq[Parameter]): String = {
-          val p = getMethodParamas(params).map {
-            case (n, v) => s"$n: ${treeToString(v.tpt)}"
+        val urlParams: Seq[Tree] =
+          params collect {
+            case query: QueryParameter =>
+              val name = query.getName
+              val prefix = if (query.getRequired) "q" else "q_o"
+              INTERP(prefix, LIT(s"$name=$$$name"))
           }
-          // since it is a route definition, this is not Scala code, so we generate it manually
-          s"$className.$methodName" + p.mkString("(", ", ", ")")
-        }
 
-        val methodCall =
-          genMethodCall(controllerName, methodName, op._2.getParameters.asScala)
+        val url = INTERP("p", LIT(doUrl(basePath, p)))
 
-        s"${padTo(8, op._1)}            ${padTo(50, url)}          ${padTo(20, methodCall)}"
+        val tree = CASE(REF(verb) APPLY {
+          if (urlParams.isEmpty) url
+          else url INFIX "?" APPLY INFIX_CHAIN("&", urlParams)
+        }) ==> methodCall
+
+        tree
+
       }).toSeq
     }
 
-    val routes =
-      completePaths.flatMap(composeRoutes)
+    val imports =
+      BLOCK {
+        Seq(
+          IMPORT("javax.inject", "_"),
+          IMPORT("play.api.routing.Router", "Routes"),
+          IMPORT("play.api.routing", "SimpleRouter"),
+          IMPORT("play.api.routing.sird", "_")
+        )
+      } inPackage packageName
 
-    if (routes.nonEmpty) Some(routes.mkString("\n\n", "\n\n", "\n"))
-    else None
+    val classDef = CLASSDEF(routerName).empty
+    val params1 = s"@Inject() (controller: $controllerName)"
+    val params2 = (CLASSDEF("") withParents "SimpleRouter").empty
+
+    val body = BLOCK {
+      DEF("routes", "Routes") withFlags Flags.OVERRIDE := BLOCK {
+        completePaths.flatMap(composeRoutes)
+      }
+    }
+
+    Seq(
+      SyntaxString(routerName + ".scala",
+                   treeToString(imports),
+                   treeToString(classDef) + " " + params1 + treeToString(params2)
+                     .replace("class ", "") + " " + treeToString(body)))
   }
 
   def generateImports(packageName: String, codeProvidedPackage: String, serviceName: String): Seq[Tree] =
@@ -98,9 +126,6 @@ class DefaultServerGenerator extends ServerGenerator with SharedServerClientCode
 
   def generate(fileName: String, packageName: String, codeProvidedPackage: String): Iterable[SyntaxString] = {
     val swagger = new SwaggerParser().read(fileName)
-
-    val controllerPackageName =
-      packageName + ".controller"
 
     val controllerName =
       controllerNameFromFileName(fileName)
@@ -142,7 +167,7 @@ class DefaultServerGenerator extends ServerGenerator with SharedServerClientCode
     val imports =
       BLOCK {
         generateImports(packageName, codeProvidedPackage, serviceName)
-      } inPackage controllerPackageName
+      } inPackage packageName
 
     val tree = CLASSDEF(controllerName + " @Inject()") withParams PARAM("service", TYPE_REF(serviceName)) :=
       BLOCK(completePaths.map(composeController).flatten)
@@ -153,7 +178,7 @@ class DefaultServerGenerator extends ServerGenerator with SharedServerClientCode
   def genControllerMethod(methodName: String, params: Seq[Parameter], resType: (String, Option[Type])): Tree = {
     val bodyParams = getParamsFromBody(params)
 
-    val methodParams = getMethodParamas(params)
+    val methodParams = getMethodParams(params)
 
     val ACTION =
       REF("Action")
@@ -227,7 +252,7 @@ class DefaultAsyncServerGenerator extends DefaultServerGenerator {
   override def genControllerMethod(methodName: String, params: Seq[Parameter], resType: (String, Option[Type])): Tree = {
     val bodyParams = getParamsFromBody(params)
 
-    val methodParams = getMethodParamas(params)
+    val methodParams = getMethodParams(params)
 
     val ACTION =
       REF("Action.async")
