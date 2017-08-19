@@ -33,4 +33,9 @@ object StringUtils {
 
   def doUrl(basePath: String, path: String): String =
     cleanUrl(cleanDuplicateSlash(basePath + sanitizePath(path)))
+
+  def handleSpaceInParamName(pname: String) : String = {
+    if(pname.contains(" ")) s"`$pname`"
+    else pname
+  }
 }
